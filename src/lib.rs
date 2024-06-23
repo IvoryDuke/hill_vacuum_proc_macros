@@ -217,7 +217,7 @@ pub fn str_array(input: TokenStream) -> TokenStream {
         String::new()
     };
 
-    let mut result = format!("pub const {ident}: [&'static str; {amount}] = [");
+    let mut result = format!("const {ident}: [&'static str; {amount}] = [");
 
     for i in 0..amount {
         result.push_str(&format!("\"{prefix}{i}\", "));
