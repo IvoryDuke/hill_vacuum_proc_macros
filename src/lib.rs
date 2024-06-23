@@ -367,14 +367,6 @@ pub fn bind_enum(input: TokenStream) -> TokenStream {
     binds.push(',');
 
     let mut path = std::env::current_dir().unwrap();
-    if !path
-        .as_os_str()
-        .to_str()
-        .unwrap()
-        .contains("hill_vacuum_lib")
-    {
-        path.push("hill_vacuum_lib/");
-    }
     path.push("src/map/editor/state/core/tool.rs");
 
     let mut lines = BufReader::new(File::open(path).unwrap())
@@ -790,14 +782,6 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn embedded_assets(_: TokenStream) -> TokenStream {
     let mut path = std::env::current_dir().unwrap();
-    if !path
-        .as_os_str()
-        .to_str()
-        .unwrap()
-        .contains("hill_vacuum_lib")
-    {
-        path.push("hill_vacuum_lib/");
-    }
     path.push("src/embedded_assets/");
 
     // Get all the files.
