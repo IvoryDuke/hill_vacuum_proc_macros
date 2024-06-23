@@ -1,0 +1,14 @@
+[package]
+name = "hill_vacuum_proc_macros"
+version = "0.2.5"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Procedural macros of the HillVacuum main library"
+readme = "README.md"
+keywords = ["gamedev", "mapeditor", "bevy"]
+
+[lib]
+proc-macro = true
+
+[dependencies.hill_vacuum_shared]
+version = "0.2.5"
