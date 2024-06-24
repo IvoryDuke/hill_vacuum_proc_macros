@@ -357,9 +357,9 @@ pub fn color_enum(input: TokenStream) -> TokenStream {
 
 //=======================================================================//
 
-/// Generates the [`Bind`] enum plus the `config_file_key()` and `label()` methods.
+/// Generates the `Bind` enum plus the `config_file_key()` and `label()` methods.
 /// # Panics
-/// Panic if the file containing the [`Tool`] enum is not at the required location.
+/// Panic if the file containing the `Tool` enum is not at the required location.
 #[proc_macro]
 pub fn bind_enum(input: TokenStream) -> TokenStream {
     let mut binds = "{".to_string();
@@ -451,7 +451,7 @@ pub fn bind_enum(input: TokenStream) -> TokenStream {
 
 //=======================================================================//
 
-/// Generates the `header()` and `icon_file_name()` methods for the [`Tool`] and [`SubTool`] enums.
+/// Generates the `header()` and `icon_file_name()` methods for the `Tool` and `SubTool` enums.
 #[inline]
 #[must_use]
 fn tools_common(stream: TokenStream) -> [String; 2] {
@@ -508,9 +508,9 @@ fn tools_common(stream: TokenStream) -> [String; 2] {
 
 //=======================================================================//
 
-/// Implements the vast majority of the methods of the [`Tool`] enum.
+/// Implements the vast majority of the methods of the `Tool` enum.
 /// # Panics
-/// Panics if `input` does not belong to the [`Tool`] enum.
+/// Panics if `input` does not belong to the `Tool` enum.
 #[proc_macro_derive(ToolEnum)]
 #[must_use]
 pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
@@ -630,9 +630,9 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
 
 //=======================================================================//
 
-/// Implements the vast majority of the methods of the [`SubTool`] enum.
+/// Implements the vast majority of the methods of the `SubTool` enum.
 /// # Panics
-/// Panics if `input` does not belong to the [`SubTool`] enum.
+/// Panics if `input` does not belong to the `SubTool` enum.
 #[proc_macro_derive(SubToolEnum)]
 #[allow(clippy::too_many_lines)]
 #[must_use]
