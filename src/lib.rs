@@ -7,12 +7,15 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader}
 };
 
 use hill_vacuum_shared::{
-    continue_if_no_match, draw_height_to_world, match_or_panic, return_if_no_match, NextValue,
-    TEXTURE_HEIGHT_RANGE,
+    continue_if_no_match,
+    match_or_panic,
+    return_if_no_match,
+    NextValue,
+    TEXTURE_HEIGHT_RANGE
 };
 use proc_macro::{Ident, TokenStream, TokenTree};
 
@@ -25,7 +28,8 @@ use proc_macro::{Ident, TokenStream, TokenTree};
 /// # Panics
 /// Function panics if `value` is not a comma.
 #[inline]
-fn is_comma(value: TokenTree) {
+fn is_comma(value: TokenTree)
+{
     assert!(match_or_panic!(value, TokenTree::Punct(p), p).as_char() == ',');
 }
 
@@ -34,7 +38,8 @@ fn is_comma(value: TokenTree) {
 /// Executes `f` for each Ident contained in `group`'s stream.
 /// # Panics
 /// Panics if `group` is not a `TokenTree::Group(_)`.
-fn for_each_ident_in_group<F: FnMut(Ident)>(group: TokenTree, mut f: F) {
+fn for_each_ident_in_group<F: FnMut(Ident)>(group: TokenTree, mut f: F)
+{
     for ident in match_or_panic!(group, TokenTree::Group(g), g)
         .stream()
         .into_iter()
@@ -51,11 +56,14 @@ fn for_each_ident_in_group<F: FnMut(Ident)>(group: TokenTree, mut f: F) {
 /// Panics if `iter` does not belong to an enum.
 #[inline]
 #[must_use]
-fn enum_ident(iter: &mut impl Iterator<Item = TokenTree>) -> Ident {
-    for item in iter.by_ref() {
+fn enum_ident(iter: &mut impl Iterator<Item = TokenTree>) -> Ident
+{
+    for item in iter.by_ref()
+    {
         let ident = continue_if_no_match!(item, TokenTree::Ident(ident), ident);
 
-        if &ident.to_string() == "enum" {
+        if &ident.to_string() == "enum"
+        {
             return match_or_panic!(iter.next_value(), TokenTree::Ident(i), i);
         }
     }
@@ -70,7 +78,8 @@ fn enum_ident(iter: &mut impl Iterator<Item = TokenTree>) -> Ident {
 #[proc_macro_derive(EnumSize)]
 #[allow(clippy::missing_panics_doc)]
 #[must_use]
-pub fn enum_size(input: TokenStream) -> TokenStream {
+pub fn enum_size(input: TokenStream) -> TokenStream
+{
     let mut iter = input.into_iter();
     format!(
         "impl {} {{ pub const SIZE: usize = {}; }}",
@@ -87,7 +96,8 @@ pub fn enum_size(input: TokenStream) -> TokenStream {
 #[allow(clippy::missing_panics_doc)]
 #[inline]
 #[must_use]
-fn enum_len(mut iter: impl Iterator<Item = TokenTree>) -> usize {
+fn enum_len(mut iter: impl Iterator<Item = TokenTree>) -> usize
+{
     let mut i = 0;
     for_each_ident_in_group(iter.next_value(), |_| i += 1);
     i
@@ -100,7 +110,8 @@ fn enum_len(mut iter: impl Iterator<Item = TokenTree>) -> usize {
 /// Panics if `input` does not belong to an enum.
 #[proc_macro_derive(EnumFromUsize)]
 #[must_use]
-pub fn enum_from_usize(input: TokenStream) -> TokenStream {
+pub fn enum_from_usize(input: TokenStream) -> TokenStream
+{
     let mut iter = input.into_iter();
     let enum_ident = enum_ident(&mut iter).to_string();
 
@@ -132,7 +143,8 @@ pub fn enum_from_usize(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(EnumIter)]
 #[allow(clippy::missing_panics_doc)]
 #[must_use]
-pub fn enum_iter(input: TokenStream) -> TokenStream {
+pub fn enum_iter(input: TokenStream) -> TokenStream
+{
     let mut iter = input.into_iter();
     let enum_ident = enum_ident(&mut iter).to_string();
     let enum_len = enum_len(iter.clone());
@@ -200,7 +212,8 @@ pub fn enum_iter(input: TokenStream) -> TokenStream {
 /// # Panics
 /// Panics if `input` is not properly formatted.
 #[proc_macro]
-pub fn str_array(input: TokenStream) -> TokenStream {
+pub fn str_array(input: TokenStream) -> TokenStream
+{
     let mut iter = input.into_iter();
 
     let ident = iter.next_value().to_string();
@@ -208,18 +221,22 @@ pub fn str_array(input: TokenStream) -> TokenStream {
 
     let amount = iter.next_value().to_string().parse::<u16>().unwrap();
 
-    let prefix = if let Some(v) = iter.next() {
+    let prefix = if let Some(v) = iter.next()
+    {
         is_comma(v);
         let v = iter.next_value();
         assert!(iter.next().is_none());
         v.to_string()
-    } else {
+    }
+    else
+    {
         String::new()
     };
 
     let mut result = format!("const {ident}: [&'static str; {amount}] = [");
 
-    for i in 0..amount {
+    for i in 0..amount
+    {
         result.push_str(&format!("\"{prefix}{i}\", "));
     }
 
@@ -233,11 +250,12 @@ pub fn str_array(input: TokenStream) -> TokenStream {
 /// enum match arm.
 #[allow(clippy::missing_panics_doc)]
 #[proc_macro]
-pub fn color_enum(input: TokenStream) -> TokenStream {
-    const COLOR_HEIGHT_RANGE: f32 = 2f32;
+pub fn color_enum(input: TokenStream) -> TokenStream
+{
+    const COLOR_HEIGHT_RANGE: f32 = 4f32;
 
-    let textures_interval: f32 = draw_height_to_world(*TEXTURE_HEIGHT_RANGE.end());
-    let textures_and_lines_interval: f32 = textures_interval + COLOR_HEIGHT_RANGE;
+    let textures_interval = f32::from(*TEXTURE_HEIGHT_RANGE.end());
+    let textures_and_lines_interval = textures_interval + COLOR_HEIGHT_RANGE;
 
     let mut height_func = "
     /// The height at which map elements colored with a certain [`Color`] should be drawn.
@@ -274,12 +292,17 @@ pub fn color_enum(input: TokenStream) -> TokenStream {
 
     let mut height = 0f32;
 
-    for item in input {
-        if let TokenTree::Punct(p) = item {
-            if p.as_char() == ',' {
+    for item in input
+    {
+        if let TokenTree::Punct(p) = item
+        {
+            if p.as_char() == ','
+            {
                 height_func.push_str(&format!(" => {height}f32,\n"));
                 height += textures_and_lines_interval;
-            } else {
+            }
+            else
+            {
                 height_func.push(p.as_char());
             }
 
@@ -294,8 +317,10 @@ pub fn color_enum(input: TokenStream) -> TokenStream {
         key_func.push_str(&format!("Self::{item} => \"{}", c.to_ascii_lowercase()));
         label_func.push_str(&format!("Self::{item} => \"{c}"));
 
-        for c in chars {
-            if c.is_uppercase() {
+        for c in chars
+        {
+            if c.is_uppercase()
+            {
                 key_func.push('_');
                 key_func.push(c.to_ascii_lowercase());
 
@@ -361,7 +386,8 @@ pub fn color_enum(input: TokenStream) -> TokenStream {
 /// # Panics
 /// Panic if the file containing the `Tool` enum is not at the required location.
 #[proc_macro]
-pub fn bind_enum(input: TokenStream) -> TokenStream {
+pub fn bind_enum(input: TokenStream) -> TokenStream
+{
     let mut binds = "{".to_string();
     binds.push_str(&input.to_string());
     binds.push(',');
@@ -369,17 +395,17 @@ pub fn bind_enum(input: TokenStream) -> TokenStream {
     let mut path = std::env::current_dir().unwrap();
     path.push("src/map/editor/state/core/tool.rs");
 
-    let mut lines = BufReader::new(File::open(path).unwrap())
-        .lines()
-        .map(Result::unwrap);
+    let mut lines = BufReader::new(File::open(path).unwrap()).lines().map(Result::unwrap);
     lines.find(|line| line.ends_with("enum Tool"));
     lines.next();
 
-    for line in lines {
+    for line in lines
+    {
         binds.push_str(&line);
         binds.push('\n');
 
-        if line.contains('}') {
+        if line.contains('}')
+        {
             break;
         }
     }
@@ -406,14 +432,18 @@ pub fn bind_enum(input: TokenStream) -> TokenStream {
         {\n"
     .to_string();
 
-    for item in match_or_panic!(iter.next_value(), TokenTree::Group(g), g).stream() {
-        if let TokenTree::Ident(ident) = item {
+    for item in match_or_panic!(iter.next_value(), TokenTree::Group(g), g).stream()
+    {
+        if let TokenTree::Ident(ident) = item
+        {
             let ident = ident.to_string();
             let mut chars = ident.chars();
             let mut value = chars.next_value().to_string();
 
-            for ch in chars {
-                if ch.is_ascii_uppercase() {
+            for ch in chars
+            {
+                if ch.is_ascii_uppercase()
+                {
                     value.push(' ');
                 }
 
@@ -427,7 +457,8 @@ pub fn bind_enum(input: TokenStream) -> TokenStream {
         }
     }
 
-    for func in [&mut key_func, &mut label_func] {
+    for func in [&mut key_func, &mut label_func]
+    {
         func.push_str("}\n}");
     }
 
@@ -454,7 +485,8 @@ pub fn bind_enum(input: TokenStream) -> TokenStream {
 /// Generates the `header()` and `icon_file_name()` methods for the `Tool` and `SubTool` enums.
 #[inline]
 #[must_use]
-fn tools_common(stream: TokenStream) -> [String; 2] {
+fn tools_common(stream: TokenStream) -> [String; 2]
+{
     let mut header_func = "
         /// The uppercase tool name.
         #[inline]
@@ -475,15 +507,18 @@ fn tools_common(stream: TokenStream) -> [String; 2] {
             {\n"
     .to_string();
 
-    for item in stream {
+    for item in stream
+    {
         let ident = continue_if_no_match!(item, TokenTree::Ident(ident), ident).to_string();
         let mut chars = ident.chars();
 
         // Label.
         let mut value = chars.next_value().to_string();
 
-        for ch in chars {
-            if ch.is_ascii_uppercase() {
+        for ch in chars
+        {
+            if ch.is_ascii_uppercase()
+            {
                 value.push(' ');
             }
 
@@ -499,7 +534,8 @@ fn tools_common(stream: TokenStream) -> [String; 2] {
         icon_file_name_func.push_str(&format!("Self::{ident} => \"{value}.png\",\n"));
     }
 
-    for func in [&mut icon_file_name_func, &mut header_func] {
+    for func in [&mut icon_file_name_func, &mut header_func]
+    {
         func.push_str("}\n}");
     }
 
@@ -513,7 +549,8 @@ fn tools_common(stream: TokenStream) -> [String; 2] {
 /// Panics if `input` does not belong to the `Tool` enum.
 #[proc_macro_derive(ToolEnum)]
 #[must_use]
-pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
+pub fn declare_tool_enum(input: TokenStream) -> TokenStream
+{
     let mut iter = input.into_iter();
     assert!(enum_ident(&mut iter).to_string() == "Tool");
     let group = match_or_panic!(iter.next_value(), TokenTree::Group(g), g);
@@ -533,7 +570,8 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
             {\n"
     .to_string();
 
-    for item in group.stream() {
+    for item in group.stream()
+    {
         let ident = continue_if_no_match!(item, TokenTree::Ident(ident), ident).to_string();
         let mut chars = ident.chars();
 
@@ -543,8 +581,10 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
         // Label.
         let mut value = chars.next_value().to_string();
 
-        for ch in chars {
-            if ch.is_ascii_uppercase() {
+        for ch in chars
+        {
+            if ch.is_ascii_uppercase()
+            {
                 value.push(' ');
             }
 
@@ -554,7 +594,8 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
         label_func.push_str(&format!("Self::{ident} => \"{value}\",\n"));
     }
 
-    for func in [&mut label_func, &mut bind_func] {
+    for func in [&mut label_func, &mut bind_func]
+    {
         func.push_str("}\n}");
     }
 
@@ -636,7 +677,8 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(SubToolEnum)]
 #[allow(clippy::too_many_lines)]
 #[must_use]
-pub fn subtool_enum(input: TokenStream) -> TokenStream {
+pub fn subtool_enum(input: TokenStream) -> TokenStream
+{
     let mut iter = input.into_iter();
     assert!(enum_ident(&mut iter).to_string() == "SubTool");
     let group = match_or_panic!(iter.next_value(), TokenTree::Group(g), g);
@@ -658,7 +700,8 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream {
             {\n"
     .to_string();
 
-    for item in group.stream() {
+    for item in group.stream()
+    {
         let ident = continue_if_no_match!(item, TokenTree::Ident(ident), ident).to_string();
         let mut chars = ident.chars();
 
@@ -668,8 +711,10 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream {
 
         tool.push(chars.next_value());
 
-        for ch in chars.by_ref() {
-            if ch.is_ascii_uppercase() {
+        for ch in chars.by_ref()
+        {
+            if ch.is_ascii_uppercase()
+            {
                 label.push(ch);
                 break;
             }
@@ -677,8 +722,10 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream {
             tool.push(ch);
         }
 
-        for ch in chars {
-            if ch.is_ascii_uppercase() {
+        for ch in chars
+        {
+            if ch.is_ascii_uppercase()
+            {
                 label.push(' ');
             }
 
@@ -689,7 +736,8 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream {
         tool_func.push_str(&format!("Self::{ident} => Tool::{tool},\n"));
     }
 
-    for func in [&mut label_func, &mut tool_func] {
+    for func in [&mut label_func, &mut tool_func]
+    {
         func.push_str("}\n}");
     }
 
@@ -780,7 +828,8 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream {
 /// Panics if the required folder cannot be found.
 #[allow(clippy::missing_panics_doc)]
 #[proc_macro]
-pub fn embedded_assets(_: TokenStream) -> TokenStream {
+pub fn embedded_assets(_: TokenStream) -> TokenStream
+{
     let mut path = std::env::current_dir().unwrap();
     path.push("src/embedded_assets/");
 
@@ -789,11 +838,10 @@ pub fn embedded_assets(_: TokenStream) -> TokenStream {
     let mut values = String::new();
     values.push_str("use bevy::asset::embedded_asset;\n");
 
-    for file in directory.into_iter().map(|p| p.unwrap().file_name()) {
+    for file in directory.into_iter().map(|p| p.unwrap().file_name())
+    {
         let file_name = file.to_str().unwrap();
-        values.push_str(&format!(
-            "bevy::asset::embedded_asset!(app, \"{file_name}\");\n"
-        ));
+        values.push_str(&format!("bevy::asset::embedded_asset!(app, \"{file_name}\");\n"));
     }
 
     values.parse().unwrap()
@@ -804,7 +852,8 @@ pub fn embedded_assets(_: TokenStream) -> TokenStream {
 /// Generates the vector of the indexes used to triangulate the meshes.
 #[allow(clippy::missing_panics_doc)]
 #[proc_macro]
-pub fn meshes_indexes(stream: TokenStream) -> TokenStream {
+pub fn meshes_indexes(stream: TokenStream) -> TokenStream
+{
     let mut stream = stream.into_iter();
     let ident = stream.next_value().to_string();
     is_comma(stream.next_value());
@@ -817,7 +866,8 @@ pub fn meshes_indexes(stream: TokenStream) -> TokenStream {
     static mut {ident}: *mut [u16] = &mut [\n"
     );
 
-    for i in 1..=size {
+    for i in 1..=size
+    {
         indexes.push_str(&format!("0u16, {i}, {i} + 1,\n"));
     }
 
