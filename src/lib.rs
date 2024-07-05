@@ -246,6 +246,41 @@ pub fn str_array(input: TokenStream) -> TokenStream
 
 //=======================================================================//
 
+/// Generates certain manual sections from some of the markdown files in the `docs` directory.
+#[allow(clippy::missing_panics_doc)]
+#[proc_macro]
+pub fn generate_manual(_: TokenStream) -> TokenStream
+{
+    let current_dir = std::env::current_dir().unwrap();
+    let mut result = String::new();
+
+    macro_rules! append {
+        ($($file:literal),+) => {$({
+            let mut path = current_dir.clone();
+            path.push(concat!("docs/", $file, ".md"));
+
+            let mut str = std::fs::read_to_string(path).unwrap()
+                .trim()
+                .replace("```ini", "")
+                .replace("   ", "")
+                .replace('\"', "\\\"");
+            str.retain(|c| c != '`');
+
+            result.push_str(&format!(
+                "const {}: &str = \"{}\";\n\n",
+                $file.to_uppercase(),
+                str
+            ));
+        })+};
+    }
+
+    append!("brushes", "things", "properties", "textures", "props", "grid");
+
+    result.parse().unwrap()
+}
+
+//=======================================================================//
+
 /// Generates a function which associates a f32 value representing a certain height to each provided
 /// enum match arm.
 #[allow(clippy::missing_panics_doc)]
