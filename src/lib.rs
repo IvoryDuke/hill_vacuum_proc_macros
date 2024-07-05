@@ -7,7 +7,7 @@
 
 use std::{
     fs::File,
-    io::{BufRead, BufReader}
+    io::{BufRead, BufReader, Write}
 };
 
 use hill_vacuum_shared::{
@@ -241,6 +241,85 @@ pub fn str_array(input: TokenStream) -> TokenStream
     }
 
     result.push_str("];");
+    result.parse().unwrap()
+}
+
+//=======================================================================//
+
+/// Generates certain manual sections from some of the markdown files in the `docs` directory, as
+/// well as the `README.md` and `docs/crate_description.md` files.
+#[allow(clippy::missing_panics_doc)]
+#[proc_macro]
+pub fn generate_manual(_: TokenStream) -> TokenStream
+{
+    #[inline]
+    #[must_use]
+    fn create(file: &str) -> File { File::create(file).expect("Unable to create file") }
+
+    #[inline]
+    fn write(f: &mut File, buffer: &str)
+    {
+        f.write_all(buffer.as_bytes()).expect("Unable to write data");
+    }
+
+    let current_dir = std::env::current_dir().unwrap();
+    let mut readme = String::new();
+    let mut result = String::new();
+
+    macro_rules! include {
+        ($file:literal) => {{
+            let mut path = current_dir.clone();
+            path.push(concat!("docs/", $file, ".md"));
+
+            let str = std::fs::read_to_string(path).unwrap();
+            readme.push_str(&str);
+            readme.push_str("\n");
+
+            str
+        }};
+
+        ($(($tag:literal, $file:literal)),+) => { $(
+            readme.push_str(concat!("### ", $tag, "\n"));
+
+            let mut str = include!($file)
+                .trim()
+                .replace("```ini", "")
+                .replace("   ", "")
+                .replace('\"', "\\\"");
+            str.retain(|c| c != '`');
+
+            result.push_str(&format!(
+                "const {}: &str = \"{}\";\n\n",
+                $file.to_uppercase(),
+                str
+            ));
+        )+};
+    }
+
+    include!("intro");
+
+    include!(
+        ("Brushes", "brushes"),
+        ("Things", "things"),
+        ("Properties", "properties"),
+        ("Textures", "textures"),
+        ("Props", "props"),
+        ("Grid", "grid")
+    );
+
+    include!("outro");
+
+    let mut f = create("docs/crate_description.md");
+    write(&mut f, &readme);
+
+    include!("faq");
+
+    let mut f = create("README.md");
+    let mut path = current_dir.clone();
+    path.push("docs/license.md");
+    write(&mut f, &std::fs::read_to_string(path).unwrap());
+    write(&mut f, &readme);
+
     result.parse().unwrap()
 }
 
