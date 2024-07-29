@@ -910,3 +910,25 @@ pub fn meshes_indexes(stream: TokenStream) -> TokenStream
 
     indexes.parse().unwrap()
 }
+
+//=======================================================================//
+
+/// Generates the sin, cos, tan, lookup table.
+#[proc_macro]
+pub fn sin_cos_tan_array(_: TokenStream) -> TokenStream
+{
+    let mut array = "
+    #[allow(clippy::approx_constant)]
+    #[allow(clippy::unreadable_literal)]
+    const SIN_COS_TAN_LOOKUP: [(f32, f32, f32); 361] = [\n"
+        .to_string();
+
+    for a in 0..=360
+    {
+        let a = (a as f32).to_radians();
+        array.push_str(&format!("({}f32, {}f32, {}f32),\n", a.sin(), a.cos(), a.tan()));
+    }
+
+    array.push_str("];");
+    array.parse().unwrap()
+}
