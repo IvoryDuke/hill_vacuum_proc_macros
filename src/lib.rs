@@ -285,23 +285,122 @@ pub fn generate_manual(_: TokenStream) -> TokenStream
 /// enum match arm.
 #[allow(clippy::missing_panics_doc)]
 #[proc_macro]
-pub fn color_enum(input: TokenStream) -> TokenStream
+pub fn color_enum(stream: TokenStream) -> TokenStream
 {
     const COLOR_HEIGHT_RANGE: f32 = 4f32;
+
+    #[inline]
+    fn is_column<I: Iterator<Item = TokenTree>>(stream: &mut I)
+    {
+        assert!(match_or_panic!(stream.next_value(), TokenTree::Punct(p), p).as_char() == ':');
+    }
+
+    #[inline]
+    fn push_key_and_label(item: &str, label_func: &mut String, key_func: &mut String)
+    {
+        let mut chars = item.chars();
+        let c = chars.next_value();
+        key_func.push_str(&format!("Self::{item} => \"{}", c.to_ascii_lowercase()));
+        label_func.push_str(&format!("Self::{item} => \"{c}"));
+
+        for c in chars
+        {
+            if c.is_uppercase()
+            {
+                key_func.push('_');
+                key_func.push(c.to_ascii_lowercase());
+
+                label_func.push(' ');
+                label_func.push(c);
+
+                continue;
+            }
+
+            for func in [&mut *key_func, &mut *label_func]
+            {
+                func.push(c);
+            }
+        }
+
+        for func in [key_func, label_func]
+        {
+            func.push_str("\",\n");
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    fn extract<I: Iterator<Item = TokenTree>>(
+        stream: &mut I,
+        end_tag: &str,
+        label_func: &mut String,
+        key_func: &mut String
+    ) -> Vec<String>
+    {
+        let mut vec: Vec<String> = Vec::new();
+
+        while let Some(item) = stream.next()
+        {
+            if let TokenTree::Punct(p) = item
+            {
+                let c = p.as_char();
+
+                match c
+                {
+                    ',' => (),
+                    '|' =>
+                    {
+                        let last = vec.last_mut().unwrap();
+                        let item = stream.next_value().to_string();
+                        push_key_and_label(&item, label_func, key_func);
+                        last.push_str(&format!(" | Self::{item}"));
+                    },
+                    _ => panic!()
+                }
+
+                continue;
+            }
+
+            let item = item.to_string();
+
+            if item == end_tag
+            {
+                is_column(stream);
+                break;
+            }
+
+            push_key_and_label(&item, label_func, key_func);
+            vec.push(format!("Self::{item}"));
+        }
+
+        vec
+    }
+
+    #[inline]
+    #[must_use]
+    fn generate_height_func<'a, I: Iterator<Item = &'a str>>(
+        start: &str,
+        mut start_height: f32,
+        interval: f32,
+        iter: I
+    ) -> String
+    {
+        let mut height_func = start.to_string();
+
+        for item in iter
+        {
+            height_func.push_str(&format!("{item} => {start_height}f32,\n"));
+            start_height += interval;
+        }
+
+        height_func.push_str("}\n}");
+        height_func
+    }
 
     let textures_interval = f32::from(*TEXTURE_HEIGHT_RANGE.end());
     let textures_and_lines_interval = textures_interval + COLOR_HEIGHT_RANGE;
 
-    let mut height_func = "
-    /// The height at which map elements colored with a certain [`Color`] should be drawn.
-    #[inline]
-    #[must_use]
-    pub const fn height(self) -> f32
-    {
-        match self
-        {
-    "
-    .to_string();
+    let mut stream = stream.into_iter();
 
     let mut key_func = "
     /// The config file key relative to the drawn color associated with [`Color`].
@@ -325,73 +424,69 @@ pub fn color_enum(input: TokenStream) -> TokenStream
     "
     .to_string();
 
-    let mut height = 0f32;
+    assert!(stream.next_value().to_string() == "clear");
+    is_column(&mut stream);
+    let clear = stream.next_value().to_string();
+    push_key_and_label(&clear, &mut label_func, &mut key_func);
+    let clear = format!("Self::{clear}");
+    is_comma(stream.next_value());
 
-    for item in input
+    assert!(stream.next_value().to_string() == "grid");
+    is_column(&mut stream);
+    let grid = extract(&mut stream, "entities", &mut label_func, &mut key_func);
+    let entities = extract(&mut stream, "ui", &mut label_func, &mut key_func);
+    let ui = extract(&mut stream, "", &mut label_func, &mut key_func);
+
+    for func in [&mut key_func, &mut label_func]
     {
-        if let TokenTree::Punct(p) = item
-        {
-            if p.as_char() == ','
-            {
-                height_func.push_str(&format!(" => {height}f32,\n"));
-                height += textures_and_lines_interval;
-            }
-            else
-            {
-                height_func.push(p.as_char());
-            }
-
-            continue;
-        }
-
-        let item = item.to_string();
-        height_func.push_str(&format!("Self::{item}"));
-
-        let mut chars = item.chars();
-        let c = chars.next_value();
-        key_func.push_str(&format!("Self::{item} => \"{}", c.to_ascii_lowercase()));
-        label_func.push_str(&format!("Self::{item} => \"{c}"));
-
-        for c in chars
-        {
-            if c.is_uppercase()
-            {
-                key_func.push('_');
-                key_func.push(c.to_ascii_lowercase());
-
-                label_func.push(' ');
-                label_func.push(c);
-
-                continue;
-            }
-
-            key_func.push(c);
-            label_func.push(c);
-        }
-
-        key_func.push_str("\",\n");
-        label_func.push_str("\",\n");
+        func.push_str("}\n}");
     }
 
-    height_func.push_str(&format!(" => {height}f32,\n}}\n}}"));
-    key_func.push_str("}\n}");
-    label_func.push_str("}\n}");
+    let height_func = generate_height_func(
+        "
+    /// The height at which map elements colored with a certain [`Color`] should be drawn.
+    #[inline]
+    #[must_use]
+    pub const fn height(self) -> f32
+    {
+        match self
+        {",
+        0f32,
+        textures_and_lines_interval,
+        Some(clear.as_str())
+            .into_iter()
+            .chain(entities.iter().chain(&grid).chain(&ui).map(String::as_str))
+    );
+
+    let line_height_func = generate_height_func(
+        "
+    /// The draw height of the lines.
+    #[inline]
+    #[must_use]
+    pub const fn line_height(self) -> f32
+    {
+        match self
+        {
+    ",
+        textures_interval + COLOR_HEIGHT_RANGE / 2f32,
+        textures_and_lines_interval,
+        Some(clear.as_str())
+            .into_iter()
+            .chain(grid.iter().chain(&entities).chain(&ui).map(String::as_str))
+    );
 
     format!(
         "
     {height_func}
     
-    /// The draw height of the lines.
+    /// The draw height of the clip overlay.
     #[inline]
     #[must_use]
     pub(in crate::map::drawer) fn clip_height(self) -> f32 {{ self.height() + {}f32 }}
 
-    /// The draw height of the lines.
-    #[inline]
-    #[must_use]
-    pub(in crate::map::drawer) fn line_height(self) -> f32 {{ self.height() + {}f32 }}
+    {line_height_func}
 
-    /// The draw height of the lines.
+    /// The draw height of the thing angle indicator.
     #[inline]
     #[must_use]
     pub(in crate::map::drawer) fn thing_angle_indicator_height(self) -> f32 {{ self.height() + \
@@ -407,7 +502,6 @@ pub fn color_enum(input: TokenStream) -> TokenStream
     {label_func}
     ",
         textures_interval + COLOR_HEIGHT_RANGE / 4f32,
-        textures_interval + COLOR_HEIGHT_RANGE / 2f32,
         textures_interval + COLOR_HEIGHT_RANGE / 4f32 * 3f32,
         textures_interval + COLOR_HEIGHT_RANGE,
     )
@@ -907,6 +1001,29 @@ pub fn meshes_indexes(stream: TokenStream) -> TokenStream
     }
 
     indexes.push_str("];");
-
     indexes.parse().unwrap()
+}
+
+//=======================================================================//
+
+/// Generates the sin, cos, tan, lookup table.
+#[allow(clippy::cast_precision_loss)]
+#[allow(clippy::missing_panics_doc)]
+#[proc_macro]
+pub fn sin_cos_tan_array(_: TokenStream) -> TokenStream
+{
+    let mut array = "
+    #[allow(clippy::approx_constant)]
+    #[allow(clippy::unreadable_literal)]
+    const SIN_COS_TAN_LOOKUP: [(f32, f32, f32); 361] = [\n"
+        .to_string();
+
+    for a in 0..=360
+    {
+        let a = (a as f32).to_radians();
+        array.push_str(&format!("({}f32, {}f32, {}f32),\n", a.sin(), a.cos(), a.tan()));
+    }
+
+    array.push_str("];");
+    array.parse().unwrap()
 }
