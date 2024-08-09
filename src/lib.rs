@@ -686,7 +686,7 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream
     let [header_func, icon_file_name_func] = tools_common(group.stream());
 
     let mut bind_func = "#[inline]
-        pub fn bind(self) -> Bind
+        pub const fn bind(self) -> Bind
         {
             match self
             {\n"
@@ -823,7 +823,7 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
 
     let mut tool_func = "
         #[inline]
-        fn tool(self) -> Tool
+        const fn tool(self) -> Tool
         {
             match self
             {\n"
