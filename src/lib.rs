@@ -287,8 +287,6 @@ pub fn generate_manual(_: TokenStream) -> TokenStream
 #[proc_macro]
 pub fn color_enum(stream: TokenStream) -> TokenStream
 {
-    const COLOR_HEIGHT_RANGE: f32 = 4f32;
-
     #[inline]
     fn is_column<I: Iterator<Item = TokenTree>>(stream: &mut I)
     {
@@ -383,7 +381,7 @@ pub fn color_enum(stream: TokenStream) -> TokenStream
         mut start_height: f32,
         interval: f32,
         iter: I
-    ) -> String
+    ) -> (String, f32)
     {
         let mut height_func = start.to_string();
 
@@ -393,13 +391,11 @@ pub fn color_enum(stream: TokenStream) -> TokenStream
             start_height += interval;
         }
 
-        height_func.push_str("}\n}");
-        height_func
+        height_func.push_str("_ => panic!(\"Invalid color: {self:?}\")\n}\n}");
+        (height_func, start_height)
     }
 
     let textures_interval = f32::from(*TEXTURE_HEIGHT_RANGE.end());
-    let textures_and_lines_interval = textures_interval + COLOR_HEIGHT_RANGE;
-
     let mut stream = stream.into_iter();
 
     let mut key_func = "
@@ -428,7 +424,13 @@ pub fn color_enum(stream: TokenStream) -> TokenStream
     is_column(&mut stream);
     let clear = stream.next_value().to_string();
     push_key_and_label(&clear, &mut label_func, &mut key_func);
-    let clear = format!("Self::{clear}");
+    is_comma(stream.next_value());
+
+    assert!(stream.next_value().to_string() == "extensions");
+    is_column(&mut stream);
+    let extensions = stream.next_value().to_string();
+    push_key_and_label(&extensions, &mut label_func, &mut key_func);
+    let extensions = format!("Self::{extensions}");
     is_comma(stream.next_value());
 
     assert!(stream.next_value().to_string() == "grid");
@@ -442,68 +444,86 @@ pub fn color_enum(stream: TokenStream) -> TokenStream
         func.push_str("}\n}");
     }
 
-    let height_func = generate_height_func(
+    let (height_func, clip_height) = generate_height_func(
         "
     /// The height at which map elements colored with a certain [`Color`] should be drawn.
     #[inline]
     #[must_use]
-    pub const fn height(self) -> f32
+    pub fn entity_height(self) -> f32
     {
         match self
         {",
-        0f32,
-        textures_and_lines_interval,
-        Some(clear.as_str())
-            .into_iter()
-            .chain(entities.iter().chain(&grid).chain(&ui).map(String::as_str))
+        1f32,
+        textures_interval + 1f32,
+        entities.iter().map(String::as_str)
     );
 
-    let line_height_func = generate_height_func(
+    let (line_height_func, thing_angle_height) = generate_height_func(
         "
     /// The draw height of the lines.
     #[inline]
     #[must_use]
-    pub const fn line_height(self) -> f32
+    pub fn line_height(self) -> f32
     {
         match self
         {
     ",
-        textures_interval + COLOR_HEIGHT_RANGE / 2f32,
-        textures_and_lines_interval,
-        Some(clear.as_str())
-            .into_iter()
-            .chain(grid.iter().chain(&entities).chain(&ui).map(String::as_str))
+        clip_height + 1f32,
+        1f32,
+        grid.iter()
+            .chain(Some(&extensions).iter().copied())
+            .chain(&entities)
+            .chain(&ui)
+            .map(String::as_str)
+    );
+
+    let (square_hgl_height_func, _) = generate_height_func(
+        "
+    /// The draw height of the square highlights.
+    #[inline]
+    #[must_use]
+    pub fn square_hgl_height(self) -> f32
+    {
+        match self
+        {
+    ",
+        thing_angle_height + 2f32,
+        1f32,
+        ui.iter().map(String::as_str)
     );
 
     format!(
         "
     {height_func}
-    
+
+    /// The draw height of an untextured polygon.
+    #[inline]
+    #[must_use]
+    pub(in crate::map::drawer) fn polygon_height(self) -> f32 {{ self.entity_height() - 1f32 }}
+
     /// The draw height of the clip overlay.
     #[inline]
     #[must_use]
-    pub(in crate::map::drawer) fn clip_height(self) -> f32 {{ self.height() + {}f32 }}
+    pub(in crate::map::drawer) const fn clip_height() -> f32 {{ {clip_height}f32 }}
 
     {line_height_func}
 
     /// The draw height of the thing angle indicator.
     #[inline]
     #[must_use]
-    pub(in crate::map::drawer) fn thing_angle_indicator_height(self) -> f32 {{ self.height() + \
-         {}f32 }}
+    pub(in crate::map::drawer) fn thing_angle_indicator_height() -> [f32; 2]
+    {{
+        [
+            {thing_angle_height}f32,
+            {thing_angle_height}f32 + 1f32
+        ]
+    }}
 
-    /// The draw height of the square highlights.
-    #[inline]
-    #[must_use]
-    pub(in crate::map::drawer) fn square_hgl_height(self) -> f32 {{ self.height() + {}f32 }}
+    {square_hgl_height_func}
 
     {key_func}
 
-    {label_func}
-    ",
-        textures_interval + COLOR_HEIGHT_RANGE / 4f32,
-        textures_interval + COLOR_HEIGHT_RANGE / 4f32 * 3f32,
-        textures_interval + COLOR_HEIGHT_RANGE,
+    {label_func}"
     )
     .parse()
     .unwrap()
