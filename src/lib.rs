@@ -14,6 +14,7 @@ use hill_vacuum_shared::{
     continue_if_no_match,
     match_or_panic,
     return_if_no_match,
+    ManualItem,
     NextValue,
     TEXTURE_HEIGHT_RANGE
 };
@@ -246,37 +247,116 @@ pub fn str_array(input: TokenStream) -> TokenStream
 
 //=======================================================================//
 
-/// Generates certain manual sections from some of the markdown files in the `docs` directory.
+/// Generates the built-in manual from some of the markdown files in the `docs` directory.
 #[allow(clippy::missing_panics_doc)]
 #[proc_macro]
 pub fn generate_manual(_: TokenStream) -> TokenStream
 {
-    let current_dir = std::env::current_dir().unwrap();
-    let mut result = String::new();
+    hill_vacuum_shared::process_manual(
+        "",
+        |string, last| {
+            string.push_str("manual_section!(\n");
 
-    macro_rules! append {
-        ($($file:literal),+) => {$({
-            let mut path = current_dir.clone();
-            path.push(concat!("docs/", $file, ".md"));
+            if last
+            {
+                string.push_str("no_separator,\n");
+            }
+        },
+        |string, name, item| {
+            match item
+            {
+                ManualItem::Regular =>
+                {
+                    string.push('\"');
+                    string.push_str(&name.to_ascii_uppercase());
+                    string.push_str("\",\n");
+                },
+                ManualItem::Tool =>
+                {
+                    let mut chars = name.chars();
 
-            let mut str = std::fs::read_to_string(path).unwrap()
+                    while let Some(mut c) = chars.next()
+                    {
+                        if c == ' '
+                        {
+                            c = chars.next_value().to_ascii_uppercase();
+                        }
+
+                        string.push(c);
+                    }
+
+                    string.push_str(",\n");
+                },
+                ManualItem::Texture => unreachable!()
+            };
+        },
+        |string, name, file, item| {
+            let processed = file
                 .trim()
+                .replace("### ", "")
                 .replace("```ini", "")
+                .replace('\"', "\\\"")
                 .replace("   ", "")
-                .replace('\"', "\\\"");
-            str.retain(|c| c != '`');
+                .replace('`', "");
 
-            result.push_str(&format!(
-                "const {}: &str = \"{}\";\n\n",
-                $file.to_uppercase(),
-                str
-            ));
-        })+};
-    }
+            match item
+            {
+                ManualItem::Regular =>
+                {
+                    string.push_str("(\"");
 
-    append!("brushes", "things", "properties", "textures", "props", "grid");
+                    let mut lines = processed.lines();
 
-    result.parse().unwrap()
+                    string.push_str(lines.next_value());
+                    string.push_str("\", \"");
+
+                    for line in lines
+                    {
+                        string.push_str(line);
+                        string.push('\n');
+                    }
+
+                    string.pop();
+                    string.push_str("\"),\n");
+                },
+                ManualItem::Tool =>
+                {
+                    let mut chars = name.chars();
+
+                    string.push('(');
+                    string.push(chars.next_value().to_ascii_uppercase());
+
+                    while let Some(mut c) = chars.next()
+                    {
+                        if c == '_'
+                        {
+                            c = chars.next_value().to_ascii_uppercase();
+                        }
+
+                        string.push(c);
+                    }
+
+                    string.push_str(", \"");
+                    string.push_str(&processed);
+
+                    string.push_str("\"),\n");
+                },
+                ManualItem::Texture =>
+                {
+                    string.push('\"');
+                    string.push_str(&processed);
+                    string.push_str("\",\n");
+                }
+            };
+        },
+        |string| {
+            string.pop();
+            string.pop();
+            string.push_str("\n);\n\n");
+        }
+    )
+    .parse()
+    .unwrap()
 }
 
 //=======================================================================//
@@ -634,7 +714,7 @@ pub fn bind_enum(input: TokenStream) -> TokenStream
 /// Generates the `header()` and `icon_file_name()` methods for the `Tool` and `SubTool` enums.
 #[inline]
 #[must_use]
-fn tools_common(stream: TokenStream) -> [String; 2]
+fn tools_common(stream: TokenStream, id: &str) -> [String; 2]
 {
     let mut header_func = "
         /// The uppercase tool name.
@@ -676,7 +756,7 @@ fn tools_common(stream: TokenStream) -> [String; 2]
 
         // Header.
         value = value.to_ascii_uppercase();
-        header_func.push_str(&format!("Self::{ident} => \"{value}\",\n"));
+        header_func.push_str(&format!("Self::{ident} => \"{value} {id}\",\n"));
 
         // Icon paths.
         value = value.to_ascii_lowercase().replace(' ', "_");
@@ -703,7 +783,7 @@ pub fn declare_tool_enum(input: TokenStream) -> TokenStream
     let mut iter = input.into_iter();
     assert!(enum_ident(&mut iter).to_string() == "Tool");
     let group = match_or_panic!(iter.next_value(), TokenTree::Group(g), g);
-    let [header_func, icon_file_name_func] = tools_common(group.stream());
+    let [header_func, icon_file_name_func] = tools_common(group.stream(), "TOOL");
 
     let mut bind_func = "#[inline]
         pub const fn bind(self) -> Bind
@@ -831,7 +911,7 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
     let mut iter = input.into_iter();
     assert!(enum_ident(&mut iter).to_string() == "SubTool");
     let group = match_or_panic!(iter.next_value(), TokenTree::Group(g), g);
-    let [header_func, icon_file_name_func] = tools_common(group.stream());
+    let [header_func, icon_file_name_func] = tools_common(group.stream(), "SUBTOOL");
 
     let mut label_func = "
         #[inline]
