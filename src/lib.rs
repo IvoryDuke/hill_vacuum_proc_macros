@@ -1026,7 +1026,7 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
                     Self::VertexMerge | Self::SideMerge => change_conditions.vx_merge_available,
                     Self::VertexInsert |
                     Self::PathFreeDraw |
-                    Self::PathAddNode => true,
+                    Self::PathInsertNode => true,
                     Self::ClipSide => change_conditions.selected_brushes_amount > 1,
                     Self::PathSimulation => unreachable!()
                 }}
