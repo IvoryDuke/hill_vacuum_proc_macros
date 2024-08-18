@@ -1,6 +1,6 @@
 [package]
 name = "hill_vacuum_proc_macros"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Procedural macros of the HillVacuum main library"
@@ -13,4 +13,4 @@ keywords = ["gamedev", "mapeditor", "bevy"]
 proc-macro = true
 
 [dependencies.hill_vacuum_shared]
-git = "https://github.com/IvoryDuke/hill_vacuum_shared"
+version = "0.6.2"
