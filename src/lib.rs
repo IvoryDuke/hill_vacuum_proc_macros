@@ -253,7 +253,6 @@ pub fn str_array(input: TokenStream) -> TokenStream
 pub fn generate_manual(_: TokenStream) -> TokenStream
 {
     hill_vacuum_shared::process_manual(
-        "",
         |string, last| {
             string.push_str("manual_section!(\n");
 
