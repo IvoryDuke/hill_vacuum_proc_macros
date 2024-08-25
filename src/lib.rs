@@ -252,14 +252,34 @@ pub fn str_array(input: TokenStream) -> TokenStream
 #[proc_macro]
 pub fn generate_manual(_: TokenStream) -> TokenStream
 {
-    hill_vacuum_shared::process_manual(
-        |string, last| {
-            string.push_str("manual_section!(\n");
+    const SHOW_EXPLANATION: &str = "
+    use crate::map::editor::state::{ui::{Tool, SubTool}, core::tool::ToolInterface};
 
-            if last
-            {
-                string.push_str("no_separator,\n");
-            }
+    #[inline]
+    fn show_explanation<F: FnOnce(&mut egui::Ui)>(ui: &mut egui::Ui, left: F, explanation: &str)
+    {
+        ui.horizontal_wrapped(|ui| {
+            egui_extras::StripBuilder::new(ui)
+                .size(egui_extras::Size::exact(250f32))
+                .size(egui_extras::Size::remainder())
+                .horizontal(|mut strip| {
+                    strip.cell(|ui| {
+                        left(ui);
+                    });
+
+                    strip.cell(|ui| {
+                        ui.label(explanation);
+                    });
+                });
+        });
+    }";
+
+    let path = std::env::current_dir().unwrap();
+    let path = path.to_str().unwrap();
+
+    let body = hill_vacuum_shared::process_docs(
+        |string| {
+            string.push_str("ui.collapsing(\n");
         },
         |string, name, item| {
             match item
@@ -269,10 +289,12 @@ pub fn generate_manual(_: TokenStream) -> TokenStream
                     string.push('\"');
                     string.push_str(&name.to_ascii_uppercase());
                     string.push_str("\",\n");
+                    string.push_str("|ui| {\nui.vertical(|ui| {\n");
                 },
                 ManualItem::Tool =>
                 {
                     let mut chars = name.chars();
+                    let mut tool = chars.next_value().to_ascii_uppercase().to_string();
 
                     while let Some(mut c) = chars.next()
                     {
@@ -281,10 +303,13 @@ pub fn generate_manual(_: TokenStream) -> TokenStream
                             c = chars.next_value().to_ascii_uppercase();
                         }
 
-                        string.push(c);
+                        tool.push(c);
                     }
 
-                    string.push_str(",\n");
+                    string.push_str(&format!(
+                        "Tool::{tool}.header(),\n|ui| {{\nui.vertical(|ui| \
+                         {{\ntools_buttons.image(ui, Tool::{tool});\n"
+                    ));
                 },
                 ManualItem::Texture => unreachable!()
             };
@@ -302,28 +327,25 @@ pub fn generate_manual(_: TokenStream) -> TokenStream
             {
                 ManualItem::Regular =>
                 {
-                    string.push_str("(\"");
-
                     let mut lines = processed.lines();
-
-                    string.push_str(lines.next_value());
-                    string.push_str("\", \"");
+                    let command = lines.next_value();
+                    let mut exp = String::new();
 
                     for line in lines
                     {
-                        string.push_str(line);
-                        string.push('\n');
+                        exp.push_str(line);
+                        exp.push('\n');
                     }
 
-                    string.pop();
-                    string.push_str("\"),\n");
+                    exp.pop();
+                    string.push_str(&format!(
+                        "show_explanation(ui, |ui| {{ ui.label(\"{command}\"); }}, \"{exp}\");\n"
+                    ));
                 },
                 ManualItem::Tool =>
                 {
                     let mut chars = name.chars();
-
-                    string.push('(');
-                    string.push(chars.next_value().to_ascii_uppercase());
+                    let mut subtool = chars.next_value().to_ascii_uppercase().to_string();
 
                     while let Some(mut c) = chars.next()
                     {
@@ -332,30 +354,51 @@ pub fn generate_manual(_: TokenStream) -> TokenStream
                             c = chars.next_value().to_ascii_uppercase();
                         }
 
-                        string.push(c);
+                        subtool.push(c);
                     }
 
-                    string.push_str(", \"");
-                    string.push_str(&processed);
+                    let mut lines = processed.lines();
+                    let mut exp = lines.next_value().to_string();
+                    exp.push_str(" (");
+                    exp.push_str(
+                        &std::fs::read_to_string(format!("{path}/docs/subtools binds/{name}.md"))
+                            .unwrap()
+                    );
+                    exp.push_str(")\n");
 
-                    string.push_str("\"),\n");
+                    for line in lines
+                    {
+                        exp.push_str(line);
+                        exp.push('\n');
+                    }
+
+                    exp.pop();
+
+                    string.push_str(&format!(
+                        "show_explanation(ui, |ui| {{ tools_buttons.image(ui, \
+                         SubTool::{subtool}); }}, \"{exp}\");\n"
+                    ));
                 },
                 ManualItem::Texture =>
                 {
-                    string.push('\"');
-                    string.push_str(&processed);
-                    string.push_str("\",\n");
+                    string.push_str(&format!(
+                        "show_explanation(ui, |ui| {{ ui.label(\"TEXTURE EDITING\"); }}, \
+                         \"{processed}\");\n"
+                    ));
                 }
             };
         },
-        |string| {
-            string.pop();
-            string.pop();
-            string.push_str("\n);\n\n");
+        |string, last| {
+            string.push_str("})\n});\n\n");
+
+            if !last
+            {
+                string.push_str("ui.separator();\n\n");
+            }
         }
-    )
-    .parse()
-    .unwrap()
+    );
+
+    format!("{SHOW_EXPLANATION}\n\n{body}").parse().unwrap()
 }
 
 //=======================================================================//
@@ -888,6 +931,14 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
             {\n"
     .to_string();
 
+    let mut bind_func = "
+        #[inline]
+        fn bind(self) -> &'static str
+        {
+            match self
+            {\n"
+    .to_string();
+
     let mut tool_func = "
         #[inline]
         const fn tool(self) -> Tool
@@ -896,26 +947,39 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
             {\n"
     .to_string();
 
+    let mut tool = String::new();
+    let mut label = String::new();
+    let mut bind = String::new();
+    let path = std::env::current_dir().unwrap();
+    let path = path.to_str().unwrap();
+
     for item in group.stream()
     {
         let ident = continue_if_no_match!(item, TokenTree::Ident(ident), ident).to_string();
         let mut chars = ident.chars();
+        let first = chars.next_value();
 
-        // Label.
-        let mut tool = String::new();
-        let mut label = String::new();
+        for s in [&mut tool, &mut label, &mut bind]
+        {
+            s.clear();
+        }
 
-        tool.push(chars.next_value());
+        tool.push(first);
+        bind.push(first.to_ascii_lowercase());
 
         for ch in chars.by_ref()
         {
             if ch.is_ascii_uppercase()
             {
                 label.push(ch);
+
+                bind.push('_');
+                bind.push(ch.to_ascii_lowercase());
                 break;
             }
 
             tool.push(ch);
+            bind.push(ch);
         }
 
         for ch in chars
@@ -923,16 +987,21 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
             if ch.is_ascii_uppercase()
             {
                 label.push(' ');
+                bind.push('_');
             }
 
             label.push(ch);
+            bind.push(ch.to_ascii_lowercase());
         }
 
         label_func.push_str(&format!("Self::{ident} => \"{label}\",\n"));
         tool_func.push_str(&format!("Self::{ident} => Tool::{tool},\n"));
+        bind_func.push_str(&format!(
+            "Self::{ident} => include_str!(\"{path}/docs/subtools binds/{bind}.md\"),\n"
+        ));
     }
 
-    for func in [&mut label_func, &mut tool_func]
+    for func in [&mut label_func, &mut tool_func, &mut bind_func]
     {
         func.push_str("}\n}");
     }
@@ -948,9 +1017,9 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
             {icon_file_name_func}
 
             #[inline]
-            fn tooltip_label(self, binds: &BindsKeyCodes) -> String
+            fn tooltip_label(self, _: &BindsKeyCodes) -> String
             {{
-                format!(\"{{}} ({{}})\", self.label(), self.key_combo(binds))
+                format!(\"{{}} ({{}})\", self.label(), self.bind())
             }}
 
             #[inline]
@@ -969,6 +1038,8 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
         impl SubTool
         {{
             {tool_func}
+
+            {bind_func}
         }}
         "
     )
