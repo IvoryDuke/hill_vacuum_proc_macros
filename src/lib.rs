@@ -950,8 +950,9 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
     let mut tool = String::new();
     let mut label = String::new();
     let mut bind = String::new();
-    let path = std::env::current_dir().unwrap();
-    let path = path.to_str().unwrap();
+    let mut subtool_binds_path = std::env::current_dir().unwrap();
+    subtool_binds_path.push("docs");
+    subtool_binds_path.push("subtools binds");
 
     for item in group.stream()
     {
@@ -994,11 +995,13 @@ pub fn subtool_enum(input: TokenStream) -> TokenStream
             bind.push(ch.to_ascii_lowercase());
         }
 
+        subtool_binds_path.push(format!("{bind}.md"));
+
         label_func.push_str(&format!("Self::{ident} => \"{label}\",\n"));
         tool_func.push_str(&format!("Self::{ident} => Tool::{tool},\n"));
-        bind_func.push_str(&format!(
-            "Self::{ident} => include_str!(\"{path}/docs/subtools binds/{bind}.md\"),\n"
-        ));
+        bind_func.push_str(&format!("Self::{ident} => include_str!({:?}),\n", subtool_binds_path));
+
+        subtool_binds_path.pop();
     }
 
     for func in [&mut label_func, &mut tool_func, &mut bind_func]
